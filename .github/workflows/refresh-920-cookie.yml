@@ -1,0 +1,43 @@
+name: refresh-920-cookie
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"   # 每 20 分鐘（UTC；GitHub 排程可能延遲數分鐘，正常）
+  workflow_dispatch: {}        # 允許手動按鈕觸發（測試用）
+
+concurrency:
+  group: refresh-920-cookie
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    services:
+      flaresolverr:
+        image: ghcr.io/flaresolverr/flaresolverr:latest
+        ports:
+          - 8191:8191
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for FlareSolverr
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -XPOST http://127.0.0.1:8191/v1 \
+                 -H 'Content-Type: application/json' \
+                 -d '{"cmd":"sessions.list"}' >/dev/null; then
+              echo "FlareSolverr ready"; exit 0
+            fi
+            echo "waiting... ($i)"; sleep 3
+          done
+          echo "FlareSolverr not ready"; exit 1
+
+      - name: Refresh cf_clearance -> Gist
+        env:
+          FLARESOLVERR_URL: http://127.0.0.1:8191/v1
+          TARGET_URL: https://920share.com/category/censored
+          OUTPUT_FILE: ./920ck.txt
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_FILENAME: 920ck.txt
+        run: python3 tools/refresh_920_cookie.py
